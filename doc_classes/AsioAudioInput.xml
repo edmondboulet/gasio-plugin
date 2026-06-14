@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="AsioAudioInput" inherits="Node" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Low-latency audio input from an ASIO driver (Windows only).
+	</brief_description>
+	<description>
+		[AsioAudioInput] captures audio from an ASIO (Audio Stream Input/Output) driver, giving much lower input latency than the standard OS audio path. It is intended for real-time use cases such as instrument input, tuners and rhythm games.
+		Typical usage: list the installed drivers with [method get_driver_list], [method open] one, connect to [signal audio_frame], then call [method start]. Each captured block is delivered through [signal audio_frame], one emission per input channel.
+		The signal is emitted on the main thread (via deferred calls) so it is safe to use from GDScript. To feed the audio into Godot's mixer, push the samples into an [AudioStreamGenerator] playback.
+		[b]Platform support:[/b] This class is only available on Windows, where the ASIO SDK is supported. On other platforms the GDExtension is not loaded and the class does not exist; guard usage with [code]ClassDB.class_exists("AsioAudioInput")[/code].
+		[codeblock]
+		var asio := AsioAudioInput.new()
+		add_child(asio)
+
+		var drivers := asio.get_driver_list()
+		if not drivers.is_empty():
+		    asio.audio_frame.connect(_on_audio_frame)
+		    if asio.open(drivers[0], -1): # -1 = minimum buffer (lowest latency)
+		        asio.start()
+
+		func _on_audio_frame(data: PackedFloat32Array, channel: int) -> void:
+		    pass # process one block of normalized float samples for `channel`
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="close">
+			<return type="void" />
+			<description>
+				Stops the stream (if running), disposes the ASIO buffers and releases the driver. Safe to call multiple times. Called automatically when the node is freed.
+			</description>
+		</method>
+		<method name="get_buffer_size" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the buffer size, in samples per channel, that the driver was opened with. Valid after a successful [method open]. Smaller values mean lower latency. See also [method get_min_buffer_size].
+			</description>
+		</method>
+		<method name="get_driver_list" qualifiers="const">
+			<return type="String[]" />
+			<description>
+				Returns the names of all installed ASIO drivers. Pass one of these names to [method open]. Returns an empty array if no ASIO drivers are installed.
+			</description>
+		</method>
+		<method name="get_input_channels" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the number of input channels available on the opened driver. Valid after a successful [method open]. [signal audio_frame] is emitted once per channel, with [code]channel[/code] ranging from [code]0[/code] to this value minus one.
+			</description>
+		</method>
+		<method name="get_min_buffer_size" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the minimum buffer size, in samples, that the opened driver supports. Pass [code]-1[/code] to [method open] to use this size for the lowest possible input latency. Valid after a successful [method open].
+			</description>
+		</method>
+		<method name="get_sample_rate" qualifiers="const">
+			<return type="float" />
+			<description>
+				Returns the sample rate, in Hz, that the driver is running at. Valid after a successful [method open]. Match an [AudioStreamGenerator]'s [code]mix_rate[/code] to this value to avoid resampling.
+			</description>
+		</method>
+		<method name="is_running" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns [code]true[/code] while the audio stream is running (between [method start] and [method stop]).
+			</description>
+		</method>
+		<method name="open">
+			<return type="bool" />
+			<param index="0" name="driver_name" type="String" />
+			<param index="1" name="buffer_size" type="int" default="0" />
+			<description>
+				Loads and initializes the named ASIO driver (one of the names from [method get_driver_list]) and creates input buffers. Returns [code]true[/code] on success.
+				[param buffer_size] selects the samples-per-block: [code]0[/code] uses the driver's preferred size (default), [code]-1[/code] uses the minimum size for lowest latency, and any positive value is clamped to the driver's supported range and rounded to its granularity.
+				Call [method start] afterwards to begin capturing. Calling [method open] again first closes any previously opened driver.
+			</description>
+		</method>
+		<method name="show_control_panel">
+			<return type="void" />
+			<description>
+				Opens the driver's own settings panel, if it provides one. Many drivers expose buffer size and sample rate configuration here. Requires a driver to be opened first.
+			</description>
+		</method>
+		<method name="start">
+			<return type="bool" />
+			<description>
+				Starts the audio stream. Must be called after a successful [method open]. Returns [code]true[/code] on success. Once started, [signal audio_frame] begins firing.
+			</description>
+		</method>
+		<method name="stop">
+			<return type="void" />
+			<description>
+				Stops the audio stream. The driver remains open and can be restarted with [method start]. Does nothing if not running.
+			</description>
+		</method>
+	</methods>
+	<signals>
+		<signal name="audio_frame">
+			<param index="0" name="data" type="PackedFloat32Array" />
+			<param index="1" name="channel" type="int" />
+			<description>
+				Emitted once per input channel for every captured audio block. [param data] holds the block's samples as normalized floats (roughly in the [code]-1.0[/code]..[code]1.0[/code] range), and [param channel] identifies the source channel ([code]0[/code]-based). Driver sample formats (16/24/32-bit integer, 32/64-bit float) are converted to float automatically.
+				Emitted on the main thread, so it is safe to call into the scene tree from a connected handler.
+			</description>
+		</signal>
+		<signal name="reset_requested">
+			<description>
+				Emitted when the driver requests a reset (for example after a configuration change in its control panel). Respond by calling [method close] and then [method open]/[method start] again.
+			</description>
+		</signal>
+		<signal name="sample_rate_changed">
+			<param index="0" name="new_rate" type="float" />
+			<description>
+				Emitted when the driver reports a sample rate change, usually due to external clock sync. [param new_rate] is the new rate in Hz. If you feed an [AudioStreamGenerator], rebuild it with the new [code]mix_rate[/code].
+			</description>
+		</signal>
+	</signals>
+</class>

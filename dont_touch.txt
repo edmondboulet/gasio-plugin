@@ -1,3 +1,3 @@
 gasio
 4.6
-GODOT_ENGINE_PATH_GOES_HERE
+C:\Program Files (x86)\godot\Godot_v4.6-stable_mono_win64.exe
