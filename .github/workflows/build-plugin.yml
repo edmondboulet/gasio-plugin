@@ -103,22 +103,13 @@ jobs:
         # A build is made for every possible combination of parameters
         # You can add or remove entries from the arrays of each parameter to customize which builds you want to run
         # See https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/running-variations-of-jobs-in-a-workflow
+        # Windows-only: the ASIO SDK depends on windows.h / COM / the Windows
+        # registry, so the plugin can only be built for Windows.
         target:
           [
-            { platform: linux, arch: x86_32, os: ubuntu-22.04 },
-            { platform: linux, arch: x86_64, os: ubuntu-22.04 },
-            { platform: linux, arch: arm32, os: ubuntu-22.04-arm },
-            { platform: linux, arch: arm64, os: ubuntu-22.04-arm },
             { platform: windows, arch: x86_32, os: windows-latest },
             { platform: windows, arch: x86_64, os: windows-latest },
-            { platform: windows, arch: arm64, os: windows-latest },
-            { platform: macos, arch: universal, os: macos-latest },
-            { platform: android, arch: x86_64, os: ubuntu-22.04 },
-            { platform: android, arch: arm32, os: ubuntu-22.04 },
-            { platform: android, arch: arm64, os: ubuntu-22.04 },
-            { platform: ios, arch: arm64, os: macos-latest },
-            { platform: web, arch: wasm32, os: ubuntu-22.04, threads: "no" },
-            { platform: web, arch: wasm32, os: ubuntu-22.04, threads: "yes" }
+            { platform: windows, arch: arm64, os: windows-latest }
           ]
         target-type: ${{ fromJson(needs.set-matrix.outputs.target_types) }}
         float-precision: ${{ fromJson(needs.set-matrix.outputs.float_precisions) }}
@@ -134,14 +125,9 @@ jobs:
         id: set-build-name
         shell: bash
         run: |
-          NAME="${{ env.PLUGIN_NAME }}.${{ matrix.target.platform }}.${{ matrix.target-type }}.${{ matrix.target.arch }}.${{ matrix.float-precision }}${{ (matrix.target.platform == 'web' && matrix.target.threads == 'yes') && '.threads' || '' }}"
+          NAME="${{ env.PLUGIN_NAME }}.${{ matrix.target.platform }}.${{ matrix.target-type }}.${{ matrix.target.arch }}.${{ matrix.float-precision }}"
           echo "build_name=$NAME" >> $GITHUB_OUTPUT
           echo "cache_name=${NAME//./_}_${{ github.event.inputs.lto }}" >> $GITHUB_OUTPUT
-
-      - name: Install multilib support
-        if: ${{ matrix.target.platform == 'linux' && matrix.target.arch == 'x86_32' }}
-        run: |
-          sudo apt-get update && sudo apt-get install -y gcc-multilib g++-multilib
 
       # Setup dependencies
       - name: Setup godot-cpp
@@ -168,28 +154,14 @@ jobs:
           echo "=== DEBUG: Build Parameters ==="
           echo "Platform: ${{ matrix.target.platform }}"
           echo "Arch: ${{ matrix.target.arch }}"
-          echo "Threads setting: ${{ matrix.target.threads }}"
           echo "Target type: ${{ matrix.target-type }}"
           echo "Float precision: ${{ matrix.float-precision }}"
           echo "LTO: ${{ github.event.inputs.lto }}"
           echo "==============================="
 
-          THREADS_FLAG=""
-          if [ "${{ matrix.target.platform }}" = "web" ]; then
-            THREADS_FLAG=" threads=${{ matrix.target.threads }}"
-          fi
-
           LTO_FLAG=""
           if [[ "${{ github.event.inputs.lto }}" = "auto" && "${{ matrix.target-type }}" = "template_release" ]]; then
-            if [[ "${{ matrix.target.platform }}" = "linux" || "${{ matrix.target.platform }}" = "windows" || "${{ matrix.target.platform }}" = "macos" || "${{ matrix.target.platform }}" = "android" || "${{ matrix.target.platform }}" = "ios" ]]; then
-              LTO_FLAG=" lto=auto"
-            elif [[ "${{ matrix.target.platform }}" = "web" ]]; then
-              if [[ "${{ matrix.target.threads }}" = "no" ]]; then
-                LTO_FLAG=" lto=auto"
-              else
-                echo "WARNING: LTO disabled for web with threads=yes due to potential Emscripten issues."
-              fi
-            fi
+            LTO_FLAG=" lto=auto"
           elif [[ "${{ github.event.inputs.lto }}" = "auto" && "${{ matrix.target-type }}" = "template_debug" ]]; then
             echo "WARNING: LTO ignored for debug builds, as it is not suitable for development."
           fi
@@ -198,7 +170,6 @@ jobs:
                 platform=${{ matrix.target.platform }} \
                 arch=${{ matrix.target.arch }} \
                 precision=${{ matrix.float-precision }} \
-                $THREADS_FLAG \
                 $LTO_FLAG
 
       - name: Save .scons_cache
