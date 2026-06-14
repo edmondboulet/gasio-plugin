@@ -14,7 +14,7 @@ def run_scons_build():
     """Run 'scons compiledb=yes' from the project root and show output in real-time."""
     try:
         process = subprocess.Popen(
-            ["scons", "compiledb=yes"],
+            ["scons"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             universal_newlines=True,

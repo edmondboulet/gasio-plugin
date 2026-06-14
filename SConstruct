@@ -24,7 +24,7 @@ def find_sources(dirs, exts):
     return sources
 
 # Configuration
-libname = "plugin_name"
+libname = "gasio"
 projectdir = "test_project"
 
 # Set up the environment
@@ -55,7 +55,7 @@ opts.Add(EnumVariable(
 
 is_2d_profile_used = False
 is_3d_profile_used = False
-is_custom_profile_used = True
+is_custom_profile_used = False
 if is_2d_profile_used:
     env["build_profile"] = "2d_build_profile.json"
 elif is_3d_profile_used:
@@ -69,6 +69,9 @@ opts.Update(env)
 # Generate help text for the options
 Help(opts.GenerateHelpText(env))
 
+# Signal godot-cpp not to generate compile_commands.json
+env["compiledb"] = False
+
 # Check for godot-cpp submodule
 if not (os.path.isdir("godot-cpp") and os.listdir("godot-cpp")):
     print_error("""godot-cpp is not available within this folder, as Git submodules haven't been initialized.
@@ -79,6 +82,14 @@ Run the following command to download godot-cpp:
 
 # Include godot-cpp SConstruct, passing all command-line arguments
 env = SConscript("godot-cpp/SConstruct", {"env": env, "customs": customs})
+
+# godot-cpp's _godot_cpp() may have re-enabled compiledb and added it to
+# Default() targets before we got control back. Strip it out now.
+import SCons.Script
+SCons.Script.DEFAULT_TARGETS[:] = [
+    t for t in SCons.Script.DEFAULT_TARGETS
+    if "compiledb" not in str(t) and "compile_commands" not in str(t)
+]
 
 # Process GDExtension-specific options
 source_dirs = env['source_dirs'].split(',')   # Convert comma-separated string to list
@@ -91,8 +102,34 @@ bundle_id_prefix = env.get('bundle_id_prefix', 'com.gdextension')  # Ensure pref
 # Append include directories to CPPPATH
 env.Append(CPPPATH=include_dirs)
 
+env.Append(CPPPATH=[
+    "asio_sdk/common",
+    "asio_sdk/host",
+    "asio_sdk/host/pc",
+])
+
+if env["platform"] == "windows":
+    env.Append(LIBS=["User32", "Ole32", "OleAut32", "Advapi32"])
+
 # Find all .cpp files recursively in the specified source directories
 sources = find_sources(source_dirs, source_exts)
+
+# dllentry.cpp defines DllEntryPoint (a DllMain clone) and references COM globals
+# (g_Templates, g_cTemplates) that are never defined in the host SDK — linking it
+# causes the MSVC linker to stall resolving unresolvable symbols.
+# combase.cpp implements CBaseObject which dllentry.cpp depends on; same problem.
+# hostsample.cpp defines int main() and a global DriverInfo, both wrong in a DLL.
+asio_exclude = {
+    os.path.normpath("asio_sdk/common/dllentry.cpp"),
+    os.path.normpath("asio_sdk/common/combase.cpp"),
+    os.path.normpath("asio_sdk/common/asiodrvr.cpp"),
+    os.path.normpath("asio_sdk/host/sample/hostsample.cpp"),
+}
+asio_sdk_sources = [
+    s for s in find_sources(["asio_sdk"], source_exts)
+    if os.path.normpath(s) not in asio_exclude
+]
+sources += asio_sdk_sources
 
 # Handle documentation generation if applicable
 if env.get("target") in ["editor", "template_debug"]:

@@ -1,6 +1,27 @@
-[gd_scene load_steps=2 format=3 uid="uid://hn8dh5y3yq6a"]
+[gd_scene format=3 uid="uid://hn8dh5y3yq6a"]
 
-[ext_resource type="Script" uid="uid://gscsivoywwwo" path="res://main.gd" id="1_ig7tw"]
+[ext_resource type="Script" uid="uid://orhy02phdfws" path="res://input_selector.gd" id="1_ig7tw"]
+[ext_resource type="Script" uid="uid://ha7ri8if67fc" path="res://music/pitch_detector.gd" id="2_h2yge"]
+[ext_resource type="Script" uid="uid://d04x0u326pjbj" path="res://music/pitch_detector_test.gd" id="3_1bvp3"]
 
-[node name="Main" type="Node2D"]
+[sub_resource type="AudioStreamMicrophone" id="AudioStreamMicrophone_ig7tw"]
+
+[node name="Main" type="Node2D" unique_id=322090631]
+
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1990815160]
+
+[node name="OptionButton" type="OptionButton" parent="CanvasLayer" unique_id=55864938]
+offset_right = 32.0
+offset_bottom = 20.0
 script = ExtResource("1_ig7tw")
+
+[node name="AudioStreamPlayer" type="AudioStreamPlayer" parent="CanvasLayer/OptionButton" unique_id=1376640052]
+stream = SubResource("AudioStreamMicrophone_ig7tw")
+volume_db = 24.0
+bus = &"Record"
+
+[node name="pitch_detector" type="Node" parent="." unique_id=1563474212]
+script = ExtResource("2_h2yge")
+
+[node name="pitch_detector_test" type="Node" parent="." unique_id=983744344]
+script = ExtResource("3_1bvp3")
