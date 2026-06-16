@@ -15,30 +15,28 @@ on:
         default: debug
       precision:
         description: |
-          Select float precision for floating-point calculations in the GDExtension:
-          - single: Uses 32-bit floats (faster, less memory, recommended for compatibility with standard Godot Engine releases).
-          - double: Uses 64-bit floats (higher precision, more memory, only compatible with Godot Engine compiled with float=64). Also you need to edit the .gdextension file to point to the double precision builds.
-          - both: Builds both single and double precision versions (use if targeting both standard and custom Godot builds).
-          Note: Most Godot Engine releases use single precision (float=32). Choose 'single' unless you have a custom double-precision Godot build.
+          Float precision. Only 'single' is supported: the godot-cpp bundled
+          extension_api.json is single-precision, so a 'double' build cannot be
+          generated without a double-precision Godot API dump.
         required: true
         type: choice
         options:
           - single
-          - double
-          - both
         default: single
       lto:
         description: |
           Select LTO (Link-Time Optimization) for release builds only:
           - none: No optimization.
-          - auto: Optimize for smaller, faster binaries by selecting the best LTO mode for each platform (recommended, may increase build time/memory usage).
-          Note: Ignored for debug builds, as LTO is not suitable for development. Disabled for Web with threads due to Emscripten limitations.
+          - auto: Optimize for smaller, faster binaries (recommended).
+          Note: Ignored for debug builds. The Windows CI toolchain is MinGW, and
+          MinGW + LTO currently fails to link against godot-cpp (undefined
+          'operator new'). Keep this on 'none' for Windows MinGW builds.
         required: true
         type: choice
         options:
           - none
           - auto
-        default: auto
+        default: none
       use_cache:
         description: |
           Use Cache: Whether to use caching for the build process (build speed is boosted significantly and you don't waste as much GitHub resources). Set to false if your project is large and you want to avoid using cache to prevent storage limit issues.
