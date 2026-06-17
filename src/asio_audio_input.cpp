@@ -200,6 +200,7 @@ bool AsioAudioInput::open(const String &driver_name, int buffer_size) {
 
     ASIOGetLatencies(&_driver_info->inputLatency, &_driver_info->outputLatency);
 
+    _opened = true;
     return true;
 }
 
@@ -224,11 +225,14 @@ void AsioAudioInput::stop() {
 void AsioAudioInput::close() {
     stop();
 
-    // Only clean up if a driver was loaded
-    if (asioDrivers && asioDrivers->getCurrentDriverIndex() >= 0) {
+    // Only tear down the driver if THIS instance opened it. A stale instance
+    // freed after another has opened a driver must not remove the live one.
+    if (_opened) {
         ASIODisposeBuffers();
         ASIOExit();
-        asioDrivers->removeCurrentDriver();
+        if (asioDrivers && asioDrivers->getCurrentDriverIndex() >= 0)
+            asioDrivers->removeCurrentDriver();
+        _opened = false;
     }
 
     if (_driver_info)

@@ -1,5 +1,7 @@
 #include "register_types.hpp"
 #include "asio_audio_input.hpp"
+#include "asio_audio_output.hpp"
+#include "asio_audio_device.hpp"
 
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/godot.hpp>
@@ -11,6 +13,8 @@ void initialize_gasio_module(ModuleInitializationLevel p_level) {
         return;
 
     ClassDB::register_class<AsioAudioInput>();
+    ClassDB::register_class<AsioAudioOutput>();
+    ClassDB::register_class<AsioAudioDevice>();
 }
 
 void uninitialize_gasio_module(ModuleInitializationLevel p_level) {

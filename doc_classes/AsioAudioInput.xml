@@ -8,6 +8,7 @@
 		Typical usage: list the installed drivers with [method get_driver_list], [method open] one, connect to [signal audio_frame], then call [method start]. Each captured block is delivered through [signal audio_frame], one emission per input channel.
 		The signal is emitted on the main thread (via deferred calls) so it is safe to use from GDScript. To feed the audio into Godot's mixer, push the samples into an [AudioStreamGenerator] playback.
 		[b]Platform support:[/b] This class is only available on Windows, where the ASIO SDK is supported. On other platforms the GDExtension is not loaded and the class does not exist; guard usage with [code]ClassDB.class_exists("AsioAudioInput")[/code].
+		[b]Related classes:[/b] [AsioAudioOutput] sends audio to an ASIO driver, and [AsioAudioDevice] opens one driver for input and output together (full duplex). ASIO allows only [b]one open driver per process[/b], so do not open the same interface with [AsioAudioInput] and [AsioAudioOutput] (or [AsioAudioDevice]) at the same time — use [AsioAudioDevice] when you need both directions on one interface.
 		[codeblock]
 		var asio := AsioAudioInput.new()
 		add_child(asio)

@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="AsioAudioOutput" inherits="Node" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Low-latency audio output to an ASIO driver (Windows only).
+	</brief_description>
+	<description>
+		[AsioAudioOutput] plays audio through an ASIO (Audio Stream Input/Output) driver, bypassing the standard OS mixer for lower output latency.
+		Typical usage: feed it audio with [method push_frames] (for example, frames captured from a bus with an [AudioEffectCapture]) and the ASIO driver thread drains them to the hardware. To avoid hearing audio twice, mute Godot's normal output while ASIO output is active.
+		Audio is queued through a lock-free ring buffer: the game pushes stereo frames on the main thread, and the ASIO callback consumes them on its own thread. If the queue underruns, silence is played rather than glitching the driver.
+		[b]Platform support:[/b] Windows only. On other platforms the GDExtension is not loaded and the class does not exist; guard usage with [code]ClassDB.class_exists("AsioAudioOutput")[/code].
+		[b]Related classes:[/b] [AsioAudioInput] captures from an ASIO driver, and [AsioAudioDevice] opens one driver for input and output together (full duplex). ASIO allows only [b]one open driver per process[/b], so do not open the same interface with both [AsioAudioInput] and [AsioAudioOutput] at once — use [AsioAudioDevice] for full duplex.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="close">
+			<return type="void" />
+			<description>
+				Stops the stream (if running), disposes the ASIO buffers and releases the driver. Safe to call multiple times; called automatically when the node is freed.
+			</description>
+		</method>
+		<method name="get_buffer_size" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the buffer size, in samples per channel, the driver was opened with. Valid after a successful [method open].
+			</description>
+		</method>
+		<method name="get_driver_list" qualifiers="const">
+			<return type="String[]" />
+			<description>
+				Returns the names of all installed ASIO drivers. Pass one of these to [method open]. Empty if none are installed.
+			</description>
+		</method>
+		<method name="get_frames_free" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the number of stereo frames that can currently be queued with [method push_frames] before the ring buffer is full. Use it to avoid pushing more than there is room for.
+			</description>
+		</method>
+		<method name="get_min_buffer_size" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the minimum buffer size, in samples, the opened driver supports. Valid after a successful [method open].
+			</description>
+		</method>
+		<method name="get_output_channels" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the number of output channels on the opened driver. Channel 0 receives the left signal and channel 1 the right; any further channels are filled with silence.
+			</description>
+		</method>
+		<method name="get_sample_rate" qualifiers="const">
+			<return type="float" />
+			<description>
+				Returns the sample rate, in Hz, the driver is running at. Match the audio you push to this rate (and ideally to [code]AudioServer.get_mix_rate()[/code]) to avoid pitch or speed errors.
+			</description>
+		</method>
+		<method name="is_running" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns [code]true[/code] while the stream is running (between [method start] and [method stop]).
+			</description>
+		</method>
+		<method name="open">
+			<return type="bool" />
+			<param index="0" name="driver_name" type="String" />
+			<param index="1" name="buffer_size" type="int" default="0" />
+			<description>
+				Loads the named ASIO driver (from [method get_driver_list]) and creates its output buffers. Returns [code]true[/code] on success.
+				[param buffer_size]: [code]0[/code] = driver preferred (default), [code]-1[/code] = minimum, any positive value is clamped to the supported range. For this push-based output the preferred size is recommended; a very small buffer gives no latency benefit and risks underruns.
+				Call [method start] afterwards. Calling [method open] again first closes any previously opened driver.
+			</description>
+		</method>
+		<method name="push_frames">
+			<return type="int" />
+			<param index="0" name="frames" type="PackedVector2Array" />
+			<description>
+				Queues stereo frames for playback ([code]x[/code] = left, [code]y[/code] = right). Returns the number of frames actually accepted, which is fewer than requested if the ring buffer is full (check [method get_frames_free] first). Call from the main thread.
+			</description>
+		</method>
+		<method name="show_control_panel">
+			<return type="void" />
+			<description>
+				Opens the driver's own settings panel, if it provides one (buffer size, sample rate, etc.). Requires a driver to be opened first.
+			</description>
+		</method>
+		<method name="start">
+			<return type="bool" />
+			<description>
+				Starts the output stream. Must be called after a successful [method open]. Returns [code]true[/code] on success.
+			</description>
+		</method>
+		<method name="stop">
+			<return type="void" />
+			<description>
+				Stops the output stream. The driver stays open and can be restarted with [method start]. Does nothing if not running.
+			</description>
+		</method>
+	</methods>
+	<signals>
+		<signal name="reset_requested">
+			<description>
+				Emitted when the driver requests a reset (e.g. after a control-panel change). Respond by calling [method close] then [method open]/[method start] again.
+			</description>
+		</signal>
+		<signal name="sample_rate_changed">
+			<param index="0" name="new_rate" type="float" />
+			<description>
+				Emitted when the driver reports a sample rate change. [param new_rate] is the new rate in Hz.
+			</description>
+		</signal>
+	</signals>
+</class>

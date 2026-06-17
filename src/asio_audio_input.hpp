@@ -59,6 +59,7 @@ private:
 
     void _process_buffers(long index);
 
+    bool   _opened          = false; // this instance owns the open driver
     bool   _running         = false;
     double _sample_rate     = 0.0;
     int    _buffer_size     = 0;
