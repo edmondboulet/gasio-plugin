@@ -16,6 +16,17 @@ extends Node
 
 const RECORD_BUS := "Record"
 
+## In full-duplex, fold the monitored input to mono (both ears). Set false to
+## keep input channels mapped to L/R separately.
+@export var full_duplex_mono := false
+
+## Noise gate on the full-duplex monitor — fades the input out below the
+## threshold to remove constant hiss/static.
+@export var full_duplex_noise_gate := true
+## Gate threshold in dBFS. Signal below this is muted; raise toward 0 if hiss
+## still bleeds through, lower if quiet playing gets cut off.
+@export var full_duplex_gate_threshold_db := -30.0
+
 # kind: "native" | "asio"
 var _in_kind := "native"
 var _in_name := ""
@@ -113,6 +124,9 @@ func _build_full_duplex(driver: String) -> void:
 		return
 	_device.set_direct_monitor(true)   # hear input through output, ASIO-thread latency
 	_device.set_monitor_gain(1.0)
+	_device.set_mono_input(full_duplex_mono)  # instrument on one input -> both ears
+	_device.set_noise_gate(full_duplex_noise_gate)
+	_device.set_noise_gate_threshold_db(full_duplex_gate_threshold_db)
 
 	# Feed the device's input into the Record bus so the pitch/chord detectors
 	# (which read Record) work in full-duplex too. Mute the Record bus so this

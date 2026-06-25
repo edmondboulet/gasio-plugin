@@ -57,6 +57,19 @@ public:
     void  set_monitor_gain(float gain) { _monitor_gain.store(gain); }
     float get_monitor_gain() const { return _monitor_gain.load(); }
 
+    // Fold the monitored input to mono (sum of input channels) and send it to
+    // both output channels. Use when the instrument is on a single input so it
+    // isn't heard in only one ear.
+    void  set_mono_input(bool enabled) { _mono_input.store(enabled); }
+    bool  is_mono_input() const { return _mono_input.load(); }
+
+    // Noise gate on the monitored signal: when the input level falls below the
+    // threshold, the monitor fades to silence (removes constant hiss/static).
+    void  set_noise_gate(bool enabled) { _gate_enabled.store(enabled); }
+    bool  is_noise_gate() const { return _gate_enabled.load(); }
+    void  set_noise_gate_threshold_db(float db);
+    float get_noise_gate_threshold_db() const;
+
     // Mix stereo game audio (L=x, R=y) into the output. Returns frames accepted.
     int push_frames(const PackedVector2Array &frames);
     int get_frames_free() const;
@@ -84,6 +97,12 @@ private:
 
     std::atomic<bool>  _monitor{true};
     std::atomic<float> _monitor_gain{1.0f};
+    std::atomic<bool>  _mono_input{false};
+
+    std::atomic<bool>  _gate_enabled{false};
+    std::atomic<float> _gate_threshold{0.0031623f}; // linear, ~ -50 dBFS
+    float _gate_env  = 0.0f;  // input envelope (callback thread)
+    float _gate_gain = 0.0f;  // smoothed gate gain (callback thread)
 
     DeviceDriverInfo *_driver_info = nullptr;
 

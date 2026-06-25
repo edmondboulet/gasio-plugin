@@ -7,6 +7,7 @@
 
 #include <cstring>
 #include <algorithm>
+#include <cmath>
 
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
@@ -254,6 +255,16 @@ void AsioAudioDevice::show_control_panel() {
     ASIOControlPanel();
 }
 
+void AsioAudioDevice::set_noise_gate_threshold_db(float db) {
+    // -120 dB or lower disables gating (everything passes).
+    _gate_threshold.store(db <= -120.0f ? 0.0f : powf(10.0f, db / 20.0f));
+}
+
+float AsioAudioDevice::get_noise_gate_threshold_db() const {
+    float lin = _gate_threshold.load();
+    return lin <= 0.0f ? -120.0f : 20.0f * log10f(lin);
+}
+
 // ---- ring (producer: main thread) -----------------------------------------
 
 int AsioAudioDevice::get_frames_free() const {
@@ -302,6 +313,16 @@ void AsioAudioDevice::_process_block(long index) {
 
     const bool monitor = _monitor.load(std::memory_order_relaxed);
     const float gain   = _monitor_gain.load(std::memory_order_relaxed);
+    const bool mono    = _mono_input.load(std::memory_order_relaxed);
+    const bool gate    = _gate_enabled.load(std::memory_order_relaxed);
+    const float gate_thr = _gate_threshold.load(std::memory_order_relaxed);
+
+    // Gate smoothing: envelope decay, fast open, slow close (keeps note tails).
+    const float env_decay = 0.9995f;
+    const float gate_open  = 0.02f;
+    const float gate_close = 0.0008f;
+
+    const int in_use = (in_n > 1) ? 2 : in_n; // channels we actually monitor
 
     int r = _read.load(std::memory_order_relaxed);
     int w = _write.load(std::memory_order_acquire);
@@ -317,8 +338,33 @@ void AsioAudioDevice::_process_block(long index) {
 
         float mL = 0.0f, mR = 0.0f;
         if (monitor && in_n > 0) {
-            mL = _in_float[0][s] * gain;
-            mR = _in_float[in_n > 1 ? 1 : 0][s] * gain;
+            // Noise gate: track the input envelope and fade the monitor out
+            // when the signal sits below the threshold (kills constant hiss).
+            if (gate) {
+                float lvl = 0.0f;
+                for (int ic = 0; ic < in_use; ++ic)
+                    lvl = std::max(lvl, std::fabs(_in_float[ic][s]));
+                _gate_env = (lvl > _gate_env) ? lvl : _gate_env * env_decay;
+                float target = (_gate_env > gate_thr) ? 1.0f : 0.0f;
+                float coef = (target > _gate_gain) ? gate_open : gate_close;
+                _gate_gain += (target - _gate_gain) * coef;
+            } else {
+                _gate_gain = 1.0f;
+            }
+
+            float g = gain * (gate ? _gate_gain : 1.0f);
+            if (mono) {
+                // Sum the input channels to one signal in both ears. For an
+                // instrument on a single input this is just that channel at
+                // full level; clamping on output handles two hot inputs.
+                float m = 0.0f;
+                for (int ic = 0; ic < in_use; ++ic)
+                    m += _in_float[ic][s];
+                mL = mR = m * g;
+            } else {
+                mL = _in_float[0][s] * g;
+                mR = _in_float[in_n > 1 ? 1 : 0][s] * g;
+            }
         }
 
         float oL = mL + gL;
@@ -399,6 +445,12 @@ void AsioAudioDevice::_bind_methods() {
     ClassDB::bind_method(D_METHOD("is_direct_monitor"),                  &AsioAudioDevice::is_direct_monitor);
     ClassDB::bind_method(D_METHOD("set_monitor_gain", "gain"),           &AsioAudioDevice::set_monitor_gain);
     ClassDB::bind_method(D_METHOD("get_monitor_gain"),                   &AsioAudioDevice::get_monitor_gain);
+    ClassDB::bind_method(D_METHOD("set_mono_input", "enabled"),          &AsioAudioDevice::set_mono_input);
+    ClassDB::bind_method(D_METHOD("is_mono_input"),                      &AsioAudioDevice::is_mono_input);
+    ClassDB::bind_method(D_METHOD("set_noise_gate", "enabled"),          &AsioAudioDevice::set_noise_gate);
+    ClassDB::bind_method(D_METHOD("is_noise_gate"),                      &AsioAudioDevice::is_noise_gate);
+    ClassDB::bind_method(D_METHOD("set_noise_gate_threshold_db", "db"),  &AsioAudioDevice::set_noise_gate_threshold_db);
+    ClassDB::bind_method(D_METHOD("get_noise_gate_threshold_db"),        &AsioAudioDevice::get_noise_gate_threshold_db);
     ClassDB::bind_method(D_METHOD("push_frames", "frames"),             &AsioAudioDevice::push_frames);
     ClassDB::bind_method(D_METHOD("get_frames_free"),                    &AsioAudioDevice::get_frames_free);
 

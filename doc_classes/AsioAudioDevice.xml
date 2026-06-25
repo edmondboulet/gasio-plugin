@@ -82,6 +82,12 @@
 				Returns whether direct input-to-output monitoring is enabled (see [method set_direct_monitor]).
 			</description>
 		</method>
+		<method name="is_mono_input" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns whether the monitored input is folded to mono (see [method set_mono_input]).
+			</description>
+		</method>
 		<method name="is_running" qualifiers="const">
 			<return type="bool" />
 			<description>
@@ -110,6 +116,13 @@
 			<param index="0" name="enabled" type="bool" />
 			<description>
 				Enables or disables routing the input straight to the output on the ASIO callback thread. This gives the lowest possible monitoring latency (no main-thread hop). Input channel 0/1 map to output channel 0/1; a mono input is duplicated to both.
+			</description>
+		</method>
+		<method name="set_mono_input">
+			<return type="void" />
+			<param index="0" name="enabled" type="bool" />
+			<description>
+				When enabled, sums the input channels into one mono signal sent to both output channels. Use this when the instrument is plugged into a single input, so it isn't heard in only one ear. Affects the direct monitor only.
 			</description>
 		</method>
 		<method name="set_monitor_gain">
